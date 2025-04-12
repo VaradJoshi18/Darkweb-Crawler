@@ -96,7 +96,7 @@ Dark Web Crawler is a Python-based application designed to crawl and clone websi
 - **GUI Interface:**  
   Tkinter is used to create a simple window interface where users can input a `.onion` URL and start the crawling in a separate thread to keep the GUI responsive.
 
-## Disclaimer and Legal Notice
+## Disclaimer
 
 > **Important:** This project is intended for educational and research purposes only.  
 > Crawling and cloning websites, especially on the dark web, can have legal and ethical implications. Ensure that you have permission to crawl any website. Use this tool responsibly and be aware of the laws in your jurisdiction regarding web scraping and dark web activities.
