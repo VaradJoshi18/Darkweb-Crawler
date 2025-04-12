@@ -11,8 +11,6 @@ Dark Web Crawler is a Python-based application designed to crawl and clone websi
 - [How It Works](#how-it-works)
 - [Disclaimer and Legal Notice](#disclaimer-and-legal-notice)
 - [Contributing](#contributing)
-- [License](#license)
-- [Acknowledgements](#acknowledgements)
 
 ## Features
 
@@ -40,7 +38,7 @@ Dark Web Crawler is a Python-based application designed to crawl and clone websi
    cd darkweb-crawler
    ```
 
-2. **Set Up a Virtual Environment (Optional but recommended):**
+2. **Set Up a Virtual Environment (Optional):**
 
    ```bash
    python -m venv venv
