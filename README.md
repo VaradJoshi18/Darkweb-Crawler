@@ -1,6 +1,6 @@
 # Dark Web Crawler
 
-Dark Web Crawler is a Python-based application designed to crawl and clone websites on the dark web (specifically, `.onion` domains) using the Tor network. The tool downloads web pages along with their essential assets (such as images, JavaScript, and CSS), storing them locally for offline browsing and analysis.
+Dark Web Crawler is a Python-based application designed to crawl and clone websites on the dark web (specifically, `.onion` domains) using the Tor network. The tool downloads web pages along with their essential assets (such as images, JavaScript, and CSS), storing them locally for offline browsing and analysis. 
 
 ## Table of Contents
 
