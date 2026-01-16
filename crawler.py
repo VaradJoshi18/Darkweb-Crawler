@@ -1,104 +1,147 @@
 import os
 import threading
+import time
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 
-# Tor proxy settings
+# ================== TOR SETTINGS ==================
 PROXIES = {
-    'http': 'socks5h://127.0.0.1:9050',
-    'https': 'socks5h://127.0.0.1:9050'
+    "http": "socks5h://127.0.0.1:9150",
+    "https": "socks5h://127.0.0.1:9150"
 }
 
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (TorCrawler)"
+}
+
+# ================== GLOBALS ==================
 SAVE_DIR = "darkweb_clone"
-if not os.path.exists(SAVE_DIR):
-    os.makedirs(SAVE_DIR)
-
 visited_urls = set()
+visited_lock = threading.Lock()
+pause_event = threading.Event()
+pause_event.set()
 
-def sanitize_filename(url):
-    return url.replace("/", "_").replace("?", "_").replace(":", "_")
+pages_crawled = 0
+MAX_PAGES = 50
 
-def download_asset(url, folder):
+# ================== HELPERS ==================
+def sanitize_filename(name):
+    name = name.split("?")[0]
+    if not name or "." not in name:
+        return f"asset_{abs(hash(name)) % 100000}.bin"
+    return name.replace("/", "_")
+
+def download_asset(url, assets_dir):
     try:
-        response = requests.get(url, proxies=PROXIES, timeout=10)
-        if response.status_code == 200:
+        r = requests.get(url, proxies=PROXIES, headers=HEADERS, timeout=15)
+        if r.status_code == 200:
             filename = sanitize_filename(os.path.basename(urlparse(url).path))
-            if not filename:
-                filename = "index.html"
-            file_path = os.path.join(folder, filename)
-            with open(file_path, "wb") as file:
-                file.write(response.content)
-            return file_path
-    except Exception as e:
-        print(f"Failed to download {url}: {e}")
+            path = os.path.join(assets_dir, filename)
+            with open(path, "wb") as f:
+                f.write(r.content)
+            return filename
+    except:
+        pass
     return None
 
-def crawl_and_clone(url, depth=2):
-    if url in visited_urls or depth <= 0:
-        return
-    visited_urls.add(url)
-    
+# ================== CORE CRAWLER ==================
+def crawl_and_clone(url, base_path, depth):
+    global pages_crawled
+
+    pause_event.wait()
+
+    with visited_lock:
+        if url in visited_urls or depth <= 0 or pages_crawled >= MAX_PAGES:
+            return
+        visited_urls.add(url)
+        pages_crawled += 1
+        progress_bar["value"] = pages_crawled
+        status_label.config(text=f"Pages crawled: {pages_crawled}")
+
     try:
-        response = requests.get(url, proxies=PROXIES, timeout=10)
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            parsed_url = urlparse(url)
-            page_folder = os.path.join(SAVE_DIR, parsed_url.netloc + parsed_url.path.replace("/", "_"))
-            if not os.path.exists(page_folder):
-                os.makedirs(page_folder)
-            
-            for tag in soup.find_all(["link", "script", "img"]):
-                asset_url = None
-                if tag.name == "link" and tag.get("href"):
-                    asset_url = urljoin(url, tag["href"])
-                    local_path = download_asset(asset_url, page_folder)
-                    if local_path:
-                        tag["href"] = os.path.relpath(local_path, SAVE_DIR)
-                elif tag.name == "script" and tag.get("src"):
-                    asset_url = urljoin(url, tag["src"])
-                    local_path = download_asset(asset_url, page_folder)
-                    if local_path:
-                        tag["src"] = os.path.relpath(local_path, SAVE_DIR)
-                elif tag.name == "img" and tag.get("src"):
-                    asset_url = urljoin(url, tag["src"])
-                    local_path = download_asset(asset_url, page_folder)
-                    if local_path:
-                        tag["src"] = os.path.relpath(local_path, SAVE_DIR)
-            
-            page_file = os.path.join(page_folder, "index.html")
-            with open(page_file, "w", encoding="utf-8") as file:
-                file.write(soup.prettify())
-            
-            for link in soup.find_all("a", href=True):
-                next_url = urljoin(url, link["href"])
-                if parsed_url.netloc in next_url:
-                    crawl_and_clone(next_url, depth-1)
+        r = requests.get(url, proxies=PROXIES, headers=HEADERS, timeout=15)
+        if r.status_code != 200:
+            return
+
+        soup = BeautifulSoup(r.text, "html.parser")
+        parsed = urlparse(url)
+
+        page_dir = os.path.join(SAVE_DIR, parsed.path.strip("/").replace("/", "_") or "root")
+        assets_dir = os.path.join(page_dir, "assets")
+        os.makedirs(assets_dir, exist_ok=True)
+
+        # ---- ASSETS ----
+        for tag, attr in [("img","src"),("script","src"),("link","href")]:
+            for t in soup.find_all(tag):
+                if t.get(attr):
+                    asset_url = urljoin(url, t[attr])
+                    fname = download_asset(asset_url, assets_dir)
+                    if fname:
+                        t[attr] = f"assets/{fname}"
+
+        with open(os.path.join(page_dir, "index.html"), "w", encoding="utf-8") as f:
+            f.write(soup.prettify())
+
+        # ---- LINKS ----
+        for a in soup.find_all("a", href=True):
+            next_url = urljoin(url, a["href"]).split("#")[0]
+            p = urlparse(next_url)
+
+            if p.netloc == parsed.netloc and p.path.startswith(base_path):
+                crawl_and_clone(next_url, base_path, depth - 1)
+
+        time.sleep(1.2)
+
     except Exception as e:
-        print(f"Error: {e}")
+        print("Error:", e)
 
-def start_crawling():
-    url = entry_url.get()
-    if not url:
-        messagebox.showerror("Error", "Please enter a .onion URL")
+# ================== UI CONTROLS ==================
+def start_crawl():
+    url = entry.get().strip()
+    if not url.endswith(".onion"):
+        messagebox.showerror("Error", "Enter valid .onion URL")
         return
-    
-    threading.Thread(target=crawl_and_clone, args=(url, 3)).start()
-    messagebox.showinfo("Success", "Crawling started! Check the darkweb_clone folder.")
 
+    os.makedirs(SAVE_DIR, exist_ok=True)
+    parsed = urlparse(url)
+    base_path = parsed.path or "/"
+
+    progress_bar["maximum"] = MAX_PAGES
+
+    threading.Thread(
+        target=crawl_and_clone,
+        args=(url, base_path, 3),
+        daemon=True
+    ).start()
+
+def pause():
+    pause_event.clear()
+    status_label.config(text="Paused")
+
+def resume():
+    pause_event.set()
+    status_label.config(text="Resumed")
+
+# ================== TKINTER UI ==================
 app = tk.Tk()
-app.title("Dark Web Crawler")
-app.geometry("400x200")
+app.title("Tor Dark Web Crawler")
+app.geometry("420x260")
 
-label = tk.Label(app, text="Enter Dark Web (.onion) URL:")
-label.pack(pady=5)
+tk.Label(app, text="Enter .onion URL").pack(pady=5)
+entry = tk.Entry(app, width=50)
+entry.pack()
 
-entry_url = tk.Entry(app, width=50)
-entry_url.pack(pady=5)
+progress_bar = ttk.Progressbar(app, length=350)
+progress_bar.pack(pady=15)
 
-start_button = tk.Button(app, text="Start Crawling", command=start_crawling)
-start_button.pack(pady=20)
+status_label = tk.Label(app, text="Idle")
+status_label.pack()
+
+tk.Button(app, text="Start", command=start_crawl).pack(pady=5)
+tk.Button(app, text="Pause", command=pause).pack()
+tk.Button(app, text="Resume", command=resume).pack()
 
 app.mainloop()
