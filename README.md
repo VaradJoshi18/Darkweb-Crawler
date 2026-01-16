@@ -48,7 +48,10 @@ Dark Web Crawler is a Python-based application designed to crawl and clone websi
 3. **Install the Required Packages:**
 
    ```bash
-   pip install requests beautifulsoup4
+   pip install beautifulsoup
+   ```
+   ```bash
+   pip install pysocks
    ```
 
 4. **Install and Run Tor:**
